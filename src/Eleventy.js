@@ -15,6 +15,7 @@ const ConsoleLogger = require("./Util/ConsoleLogger");
 const PathPrefixer = require("./Util/PathPrefixer");
 const TemplateConfig = require("./TemplateConfig");
 const FileSystemSearch = require("./FileSystemSearch");
+const EleventyConfigOverrides = require("./EleventyConfigOverrides");
 
 const simplePlural = require("./Util/Pluralize");
 const checkPassthroughCopyBehavior = require("./Util/PassthroughCopyBehaviorCheck");
@@ -33,31 +34,34 @@ const eventBus = require("./EventBus");
  * @returns {module:11ty/eleventy/Eleventy~Eleventy}
  */
 class Eleventy {
-  constructor(input, output, options = {}, eleventyConfig = null) {
-    if (!eleventyConfig) {
-      this.eleventyConfig = new TemplateConfig(null, options.configPath);
-    } else {
-      this.eleventyConfig = eleventyConfig;
-      if (options.configPath) {
-        this.eleventyConfig.setProjectConfigPath(options.configPath);
-      }
+  constructor(input, output, options = {}) {
+    /**
+     * @member {Object} - Helper to manage the configuration overrides from CLI in Eleventy
+     * @default null
+     */
+    this.overrides = new EleventyConfigOverrides();
+    this.overrides.setInput(input);
+    if (options.inputDir) {
+      // Explicit input directory (used when input is a single file or scoped via serverless)
+      this.overrides.setInputDir(options.inputDir);
     }
-
-    this.eleventyConfig.setLogger(this.logger);
+    this.overrides.setOutput(output);
+    this.overrides.setTemplateFormats(options.formats);
 
     /**
      * @member {String} - The top level directory the site pretends to reside in
      * @default "/"
      */
-    this.pathPrefix = options.pathPrefix || "/";
+    this.pathPrefix = options.pathPrefix;
+    this.overrides.setPathPrefix(this.pathPrefix);
 
-    if (this.pathPrefix || this.pathPrefix === "") {
-      this.eleventyConfig.setPathPrefix(this.pathPrefix);
-    }
+    this.eleventyConfig = new TemplateConfig(null, options.configPath);
+    this.eleventyConfig.setLogger(this.logger);
+    this.eleventyConfig.setConfigOverrides(this.overrides);
 
     /* Programmatic API config */
     if (options.config && typeof options.config === "function") {
-      // TODO use return object here?
+      // Note: no return object supported here.
       options.config(this.eleventyConfig.userConfig);
     }
 
@@ -138,13 +142,6 @@ class Eleventy {
      */
     this.needsInit = true;
 
-    /**
-     * @member {Boolean} - Explicit input directory (usually used when input is a single file/serverless)
-     */
-    if (options.inputDir) {
-      this.setInputDir(options.inputDir);
-    }
-
     if (performance) {
       // TODO this doesn’t reset in serverless mode correctly (cumulative from start of --serve/watch)
       debug("Eleventy warm up time (in ms) %o", performance.now());
@@ -153,22 +150,10 @@ class Eleventy {
     /** @member {Number} - The timestamp of Eleventy start. */
     this.start = this.getNewTimestamp();
 
-    /**
-     * @member {Array<String>} - Subset of template types.
-     * @default null
-     */
-    this.formatsOverride = null;
-
     /** @member {Object} - tbd. */
     this.eleventyServe = new EleventyServe();
     this.eleventyServe.config = this.config;
     this.eleventyServe.eleventyConfig = this.eleventyConfig;
-
-    /** @member {String} - Holds the path to the input directory. */
-    this.rawInput = input;
-
-    /** @member {String} - Holds the path to the output directory. */
-    this.rawOutput = output;
 
     /** @member {Object} - tbd. */
     this.watchManager = new EleventyWatch();
@@ -195,26 +180,22 @@ class Eleventy {
 
   /** @type {String} */
   get input() {
-    return this.rawInput || this.config.dir.input;
+    return this.config.dir.input;
   }
 
   /** @type {String} */
   get inputDir() {
-    if (this._inputDir) {
-      // set manually via setter
-      return this._inputDir;
-    }
-
-    return TemplatePath.getDir(this.input);
+    return this.overrides.getInputDir(this.config.dir.input);
   }
 
+  // Backwards compatibility method only, not used in Eleventy internally
   setInputDir(dir) {
-    this._inputDir = dir;
+    this.overrides.setInputDir(dir);
   }
 
   /** @type {String} */
   get outputDir() {
-    return this.rawOutput || this.config.dir.output;
+    return this.config.dir.output;
   }
 
   /**
@@ -247,19 +228,6 @@ class Eleventy {
    */
   setIgnoreInitial(ignoreInitialBuild) {
     this.isRunInitialBuild = !ignoreInitialBuild;
-  }
-
-  /**
-   * Updates the path prefix used in the config.
-   *
-   * @method
-   * @param {String} pathPrefix - The new path prefix.
-   */
-  setPathPrefix(pathPrefix) {
-    if (pathPrefix || pathPrefix === "") {
-      this.eleventyConfig.setPathPrefix(pathPrefix);
-      this.config = this.eleventyConfig.getConfig();
-    }
   }
 
   /**
@@ -376,9 +344,12 @@ class Eleventy {
       await this.config.events.emit("eleventy.env", this.env);
     }
 
+    // Explicit input directory, most useful when input is a single file (and in serverless mode)
+    this.config.dir.inputDir = this.inputDir;
+    // For backwards compat
     this.config.inputDir = this.inputDir;
 
-    let formats = this.formatsOverride || this.config.templateFormats;
+    let formats = this.config.templateFormats;
     this.extensionMap = new EleventyExtensionMap(formats, this.eleventyConfig);
     await this.config.events.emit("eleventy.extensionmap", this.extensionMap);
 
@@ -444,8 +415,8 @@ class Eleventy {
     };
 
     debug(`Directories:
-Input (Dir): ${dirs.input}
-Input (File): ${this.rawInput}
+Input (Dir): ${this.inputDir}
+Input (File): ${this.input}
 Data: ${dirs.data}
 Includes: ${dirs.includes}
 Layouts: ${dirs.layouts}
@@ -580,18 +551,6 @@ Verbose Output: ${this.verboseMode}`);
 
     // Set verbose mode in config file
     this.eleventyConfig.verbose = this.verboseMode;
-  }
-
-  /**
-   * Updates the template formats of Eleventy.
-   *
-   * @method
-   * @param {String} formats - The new template formats.
-   */
-  setFormats(formats) {
-    if (formats && formats !== "*") {
-      this.formatsOverride = formats.split(",");
-    }
   }
 
   /**
@@ -1135,6 +1094,7 @@ Arguments:
 
     try {
       let eventsArg = {
+        // For backwards compatibility, lives in `dir.inputDir` moving forward
         inputDir: this.config.inputDir,
         dir: this.config.dir,
         runMode: this.runMode,

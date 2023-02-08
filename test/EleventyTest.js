@@ -64,8 +64,9 @@ test("Eleventy process.ENV", async (t) => {
 });
 
 test("Eleventy file watching", async (t) => {
-  let elev = new Eleventy("./test/stubs", "./test/stubs/_site");
-  elev.setFormats("njk");
+  let elev = new Eleventy("./test/stubs", "./test/stubs/_site", {
+    formats: "njk",
+  });
 
   await elev.init();
   let globalData = await elev.templateData.getGlobalData();
@@ -91,8 +92,9 @@ test("Eleventy file watching", async (t) => {
 });
 
 test("Eleventy file watching (don’t watch deps of passthrough copy .js files)", async (t) => {
-  let elev = new Eleventy("./test/stubs-1325", "./test/stubs-1325/_site");
-  elev.setFormats("11ty.js,js");
+  let elev = new Eleventy("./test/stubs-1325", "./test/stubs-1325/_site", {
+    formats: "11ty.js,js",
+  });
 
   await elev.init();
   await elev.eleventyFiles.getFiles();
@@ -102,8 +104,9 @@ test("Eleventy file watching (don’t watch deps of passthrough copy .js files)"
 });
 
 test("Eleventy file watching (no JS dependencies)", async (t) => {
-  let elev = new Eleventy("./test/stubs", "./test/stubs/_site");
-  elev.setFormats("njk");
+  let elev = new Eleventy("./test/stubs", "./test/stubs/_site", {
+    formats: "njk",
+  });
 
   let wt = new EleventyWatchTargets();
   wt.watchJavaScriptDependencies = false;

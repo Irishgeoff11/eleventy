@@ -50,9 +50,6 @@ class TemplateConfig {
   constructor(customRootConfig, projectConfigPath) {
     this.userConfig = new UserConfig();
 
-    /** @member {module:11ty/eleventy/TemplateConfig~TemplateConfig~override} - tbd. */
-    this.overrides = {};
-
     /**
      * @member {String} - Path to local project config.
      * @default .eleventy.js
@@ -87,6 +84,11 @@ class TemplateConfig {
     this.logger = logger;
   }
 
+  /* Setter for Directories */
+  setConfigOverrides(overrides) {
+    this.configOverrides = overrides;
+  }
+
   /**
    * Normalises local project config file path.
    *
@@ -107,14 +109,6 @@ class TemplateConfig {
       return TemplatePath.addLeadingDotSlashArray(this.projectConfigPaths.filter((path) => path));
     }
     return [];
-  }
-
-  get inputDir() {
-    return this._inputDir;
-  }
-
-  set inputDir(inputDir) {
-    this._inputDir = inputDir;
   }
 
   /**
@@ -163,44 +157,13 @@ class TemplateConfig {
   }
 
   /**
-   * Overwrites the config path.
-   *
-   * @param {String} path - The new config path.
-   */
-  setProjectConfigPath(path) {
-    if (path !== undefined) {
-      this.projectConfigPaths = [path];
-    } else {
-      this.projectConfigPaths = [];
-    }
-
-    if (this.hasConfigMerged) {
-      // merge it again
-      debugDev("Merging in getConfig again after setting the local project config path.");
-      this.forceReloadConfig();
-    }
-  }
-
-  /**
-   * Overwrites the path prefix.
-   *
-   * @param {String} pathPrefix - The new path prefix.
-   */
-  setPathPrefix(pathPrefix) {
-    if (pathPrefix && pathPrefix !== "/") {
-      debug("Setting pathPrefix to %o", pathPrefix);
-      this.overrides.pathPrefix = pathPrefix;
-    }
-  }
-
-  /**
    * Gets the current path prefix denoting the root folder the output will be deployed to
    *
    *  @returns {String} - The path prefix string
    */
   getPathPrefix() {
-    if (this.overrides.pathPrefix) {
-      return this.overrides.pathPrefix;
+    if (this.cfgDirOverrides.pathPrefix) {
+      return this.cfgDirOverrides.pathPrefix;
     }
 
     if (!this.hasConfigMerged) {
@@ -271,12 +234,31 @@ class TemplateConfig {
     this.userConfig.activeNamespace = storedActiveNamespace;
   }
 
+  get cfgOverrides() {
+    if (this.configOverrides) {
+      return this.configOverrides.getConfigValues();
+    }
+
+    return {};
+  }
+
+  get cfgDirOverrides() {
+    if (this.configOverrides) {
+      return this.configOverrides.getConfigDirValues();
+    }
+
+    return {};
+  }
+
   /**
    * Fetches and executes the local configuration file
    *
    * @returns {{}} merged - The merged config file object.
    */
   requireLocalConfigFile() {
+    // We want any CLI override values to be available in eleventyConfig.dir on first run (AND in plugins)
+    this.overrideValuesFromCli(this.userConfig);
+
     let localConfig = {};
     let path = this.projectConfigPaths.filter((path) => path).find((path) => fs.existsSync(path));
 
@@ -324,6 +306,18 @@ class TemplateConfig {
     return localConfig;
   }
 
+  overrideValuesFromCli(mergedConfig) {
+    // Setup a few properties for plugins:
+    // pathPrefix, formats from the CLI
+    Object.assign(mergedConfig, this.cfgOverrides);
+
+    // dirs from the CLI
+    if (!mergedConfig.dir) {
+      mergedConfig.dir = {};
+    }
+    Object.assign(mergedConfig.dir, this.cfgDirOverrides);
+  }
+
   /**
    * Merges different config files together.
    *
@@ -336,7 +330,8 @@ class TemplateConfig {
     // Template Formats:
     // 1. Root Config (usually defaultConfig.js)
     // 2. Local Config return object (project .eleventy.js)
-    // 3.
+    // 3. CLI via --formats (managed upstream in Eleventy.js)
+
     let templateFormats = this.rootConfig.templateFormats || [];
     if (localConfig && localConfig.templateFormats) {
       templateFormats = localConfig.templateFormats;
@@ -345,12 +340,7 @@ class TemplateConfig {
 
     let mergedConfig = merge({}, this.rootConfig, localConfig);
 
-    // Setup a few properties for plugins:
-
-    // Setup pathPrefix set via command line for plugin consumption
-    if (this.overrides.pathPrefix) {
-      mergedConfig.pathPrefix = this.overrides.pathPrefix;
-    }
+    this.overrideValuesFromCli(mergedConfig);
 
     // Returning a falsy value (e.g. "") from user config should reset to the default value.
     if (!mergedConfig.pathPrefix) {
@@ -384,9 +374,7 @@ class TemplateConfig {
 
     merge(mergedConfig, eleventyConfigApiMergingObject);
 
-    // Apply overrides, currently only pathPrefix uses this I think!
-    debug("overrides: %o", this.overrides);
-    merge(mergedConfig, this.overrides);
+    this.overrideValuesFromCli(mergedConfig);
 
     // Restore templateFormats
     mergedConfig.templateFormats = templateFormats;

@@ -1,5 +1,6 @@
 const test = require("ava");
 const md = require("markdown-it");
+const EleventyConfigOverrides = require("../src/EleventyConfigOverrides");
 const TemplateConfig = require("../src/TemplateConfig");
 
 test("Template Config local config overrides base config", async (t) => {
@@ -20,10 +21,7 @@ test("Template Config local config overrides base config", async (t) => {
   t.is(Object.keys(cfg.transforms).length, 1);
 
   t.is(
-    cfg.transforms.prettyHtml(
-      `<html><body><div></div></body></html>`,
-      "test.html"
-    ),
+    cfg.transforms.prettyHtml(`<html><body><div></div></body></html>`, "test.html"),
     `<html>
   <body>
     <div></div>
@@ -70,12 +68,9 @@ test("Add liquid filter", (t) => {
     require("../src/defaultConfig.js"),
     "./test/stubs/config.js"
   );
-  templateCfg.userConfig.addLiquidFilter(
-    "myFilterName",
-    function (liquidEngine) {
-      return {};
-    }
-  );
+  templateCfg.userConfig.addLiquidFilter("myFilterName", function (liquidEngine) {
+    return {};
+  });
 
   let cfg = templateCfg.getConfig();
   t.not(Object.keys(cfg.liquidFilters).indexOf("myFilterName"), -1);
@@ -126,18 +121,9 @@ test("Add namespaced universal filter", (t) => {
   });
 
   let cfg = templateCfg.getConfig();
-  t.not(
-    Object.keys(cfg.liquidFilters).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.handlebarsHelpers).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.nunjucksFilters).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
+  t.not(Object.keys(cfg.liquidFilters).indexOf("testNamespaceMyFilterName"), -1);
+  t.not(Object.keys(cfg.handlebarsHelpers).indexOf("testNamespaceMyFilterName"), -1);
+  t.not(Object.keys(cfg.nunjucksFilters).indexOf("testNamespaceMyFilterName"), -1);
 });
 
 test("Add namespaced universal filter using underscore", (t) => {
@@ -150,18 +136,9 @@ test("Add namespaced universal filter using underscore", (t) => {
   });
 
   let cfg = templateCfg.getConfig();
-  t.not(
-    Object.keys(cfg.liquidFilters).indexOf("testNamespace_myFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.handlebarsHelpers).indexOf("testNamespace_myFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.nunjucksFilters).indexOf("testNamespace_myFilterName"),
-    -1
-  );
+  t.not(Object.keys(cfg.liquidFilters).indexOf("testNamespace_myFilterName"), -1);
+  t.not(Object.keys(cfg.handlebarsHelpers).indexOf("testNamespace_myFilterName"), -1);
+  t.not(Object.keys(cfg.nunjucksFilters).indexOf("testNamespace_myFilterName"), -1);
 });
 
 test("Add namespaced plugin", (t) => {
@@ -174,18 +151,9 @@ test("Add namespaced plugin", (t) => {
   });
 
   let cfg = templateCfg.getConfig();
-  t.not(
-    Object.keys(cfg.liquidFilters).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.handlebarsHelpers).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.nunjucksFilters).indexOf("testNamespaceMyFilterName"),
-    -1
-  );
+  t.not(Object.keys(cfg.liquidFilters).indexOf("testNamespaceMyFilterName"), -1);
+  t.not(Object.keys(cfg.handlebarsHelpers).indexOf("testNamespaceMyFilterName"), -1);
+  t.not(Object.keys(cfg.nunjucksFilters).indexOf("testNamespaceMyFilterName"), -1);
 });
 
 test("Add namespaced plugin using underscore", (t) => {
@@ -200,18 +168,9 @@ test("Add namespaced plugin using underscore", (t) => {
   });
 
   let cfg = templateCfg.getConfig();
-  t.not(
-    Object.keys(cfg.liquidFilters).indexOf("testNamespace_myFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.handlebarsHelpers).indexOf("testNamespace_myFilterName"),
-    -1
-  );
-  t.not(
-    Object.keys(cfg.nunjucksFilters).indexOf("testNamespace_myFilterName"),
-    -1
-  );
+  t.not(Object.keys(cfg.liquidFilters).indexOf("testNamespace_myFilterName"), -1);
+  t.not(Object.keys(cfg.handlebarsHelpers).indexOf("testNamespace_myFilterName"), -1);
+  t.not(Object.keys(cfg.nunjucksFilters).indexOf("testNamespace_myFilterName"), -1);
 });
 
 test("Empty namespace", (t) => {
@@ -295,7 +254,11 @@ test("Test url universal filter with custom pathPrefix (no slash)", (t) => {
     require("../src/defaultConfig.js"),
     "./test/stubs/config.js"
   );
-  templateCfg.setPathPrefix("/testdirectory/");
+
+  let overrides = new EleventyConfigOverrides();
+  overrides.setPathPrefix("/testdirectory/");
+  templateCfg.setConfigOverrides(overrides);
+
   let cfg = templateCfg.getConfig();
   t.is(cfg.pathPrefix, "/testdirectory/");
 });
@@ -571,7 +534,9 @@ test(".addPlugin has access to pathPrefix", (t) => {
 test(".addPlugin has access to pathPrefix (override method)", (t) => {
   t.plan(1);
   let templateCfg = new TemplateConfig();
-  templateCfg.setPathPrefix("/test/");
+  let overrides = new EleventyConfigOverrides();
+  overrides.setPathPrefix("/test/");
+  templateCfg.setConfigOverrides(overrides);
 
   templateCfg.userConfig.addPlugin(function (eleventyConfig) {
     t.is(eleventyConfig.pathPrefix, "/test/");

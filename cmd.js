@@ -63,6 +63,7 @@ try {
       quietMode: argv.quiet,
       configPath: argv.config,
       pathPrefix: argv.pathprefix,
+      formats: argv.formats,
       runMode: argv.serve ? "serve" : argv.watch ? "watch" : "build",
     });
 
@@ -77,7 +78,6 @@ try {
     elev.setDryRun(argv.dryrun);
     elev.setIgnoreInitial(argv["ignore-initial"]);
     elev.setIncrementalBuild(argv.incremental);
-    elev.setFormats(argv.formats);
 
     // careful, we can’t use async/await here to error properly
     // with old node versions in `please-upgrade-node` above.
